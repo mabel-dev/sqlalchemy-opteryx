@@ -253,24 +253,62 @@ class Cursor:
 
         while elapsed < max_wait:
             status = self._connection._get_statement_status(self._statement_handle)
-            state = status.get("status", {}).get("state", "UNKNOWN")
+            raw_state = status.get("status")
 
-            if state in ("SUCCEEDED", "SUCCESS", "COMPLETED"):
-                # Fetch results
+            if isinstance(raw_state, dict):
+                state_value = raw_state.get("state")
+                status_details = raw_state
+            else:
+                state_value = raw_state
+                status_details = {}
+
+            if not state_value:
+                state_value = status.get("state")
+
+            normalized_state = (state_value or "UNKNOWN").upper()
+
+            if normalized_state in ("COMPLETED", "SUCCEEDED", "INCHOATE"):
                 self._fetch_results()
                 return
-            elif state in ("FAILED", "ERROR", "CANCELLED"):
-                description = status.get("status", {}).get("description", "Unknown error")
+            if normalized_state in ("FAILED", "CANCELLED"):
+                description = (
+                    status_details.get("description")
+                    or status.get("description")
+                    or status.get("detail")
+                    or "Unknown error"
+                )
                 raise DatabaseError(f"Statement execution failed: {description}")
-            elif state in ("SUBMITTED", "RUNNING", "PENDING", "EXECUTING"):
+            if normalized_state in ("UNKNOWN", "SUBMITTED", "EXECUTING", "RUNNING"):
                 time.sleep(poll_interval)
                 elapsed += poll_interval
-                # Exponential backoff up to 5 seconds
                 poll_interval = min(poll_interval * 1.5, 5.0)
-            else:
-                raise DatabaseError(f"Unknown statement state: {state}")
+                continue
+
+            raise DatabaseError(f"Unknown statement state: {state_value}")
 
         raise OperationalError("Statement execution timed out")
+
+    @staticmethod
+    def _rows_from_columnar_data(column_data: Sequence[Dict[str, Any]]) -> List[Tuple[Any, ...]]:
+        """Convert column-oriented payloads into row tuples."""
+        column_values: List[List[Any]] = []
+        for column in column_data:
+            if not isinstance(column, dict):
+                continue
+            values = column.get("values") or []
+            column_values.append(list(values))
+        if not column_values:
+            return []
+        max_rows = max((len(values) for values in column_values), default=0)
+        return [
+            tuple(
+                column_values[col_index][row_index]
+                if row_index < len(column_values[col_index])
+                else None
+                for col_index in range(len(column_values))
+            )
+            for row_index in range(max_rows)
+        ]
 
     def _fetch_results(self) -> None:
         """Fetch results from a completed statement."""
@@ -314,12 +352,8 @@ class Cursor:
                             for i, col in enumerate(data)
                         ]
                         has_description = True
-                    values_lists = [col.get("values", []) for col in data]
-                    if values_lists:
-                        n_local = len(values_lists[0])
-                        for i in range(n_local):
-                            row = tuple(values_lists[j][i] for j in range(len(values_lists)))
-                            rows.append(row)
+                    column_rows = self._rows_from_columnar_data(data)
+                    rows.extend(column_rows)
                 else:
                     # Row-oriented data (list of rows)
                     for row in data:
@@ -335,8 +369,7 @@ class Cursor:
             if total_rows is not None and offset >= total_rows:
                 break
 
-            # Continue if next_page is present; many APIs expose next_page; if not, stop when we see no rows
-            if not result.get("next_page") and (total_rows is None or offset >= total_rows):
+            if fetched_this_page < page_size:
                 break
 
         # Finalize rows and counts
@@ -381,11 +414,14 @@ class Cursor:
 
     def setinputsizes(self, sizes: Sequence[Any]) -> None:
         """Set input sizes (no-op, but required by PEP 249)."""
-        pass
+        _ = sizes
+        return None
 
     def setoutputsize(self, size: int, column: Optional[int] = None) -> None:
         """Set output size (no-op, but required by PEP 249)."""
-        pass
+        _ = size
+        _ = column
+        return None
 
     def __iter__(self) -> "Cursor":
         """Make cursor iterable."""
@@ -511,7 +547,7 @@ class Connection:
         """Get the status of a submitted statement."""
         self._check_closed()
 
-        url = urljoin(self._data_base_url() + "/", f"api/v1/statements/{statement_handle}")
+        url = urljoin(self._data_base_url() + "/", f"api/v1/statements/{statement_handle}/status")
 
         try:
             response = self._session.get(url, timeout=self._timeout)
@@ -532,15 +568,6 @@ class Connection:
         Note: The current API may return results as part of status response
         or via a separate results endpoint. This method handles both cases.
         """
-        # Try to get results from the status endpoint first
-        # The API design may evolve to have a separate results endpoint
-        status = self._get_statement_status(statement_handle)
-
-        # If results are embedded in status response
-        if "data" in status or "columns" in status:
-            return status
-
-        # Try a dedicated results endpoint if it exists
         url = urljoin(self._data_base_url() + "/", f"api/v1/statements/{statement_handle}/results")
         params: Dict[str, Any] = {}
         if num_rows is not None:
@@ -549,13 +576,13 @@ class Connection:
             params["offset"] = int(offset)
         try:
             response = self._session.get(url, params=params or None, timeout=self._timeout)
-            if response.status_code == 200:
-                return response.json()
+            response.raise_for_status()
+            return response.json()
         except requests.exceptions.RequestException:
             pass
 
-        # Return status response (may contain partial result info)
-        return status
+        # Fallback to status endpoint if dedicated results are unavailable
+        return self._get_statement_status(statement_handle)
 
     def close(self) -> None:
         """Close the connection."""
