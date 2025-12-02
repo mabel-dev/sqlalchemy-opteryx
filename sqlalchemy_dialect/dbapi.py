@@ -315,25 +315,21 @@ class Cursor:
         if not self._statement_handle:
             return
 
-        page_size = max(1, self._arraysize)
+        page_size = max(100, 1, self._arraysize)
         offset = 0
         has_description = False
         rows: List[Tuple[Any, ...]] = []
         total_rows: Optional[int] = None
 
-        while True:
-            result = self._connection._get_statement_results(
-                self._statement_handle, num_rows=page_size, offset=offset
-            )
-
-            # Set total_rows if provided
+        def process_result_page(result: Dict[str, Any]) -> int:
+            nonlocal has_description, total_rows
+            new_rows = 0
             if total_rows is None and "total_rows" in result:
                 try:
                     total_rows = int(result.get("total_rows", 0))
-                except Exception:
+                except (TypeError, ValueError):
                     total_rows = None
 
-            # Set description if present
             columns_meta = result.get("columns", [])
             if columns_meta and not has_description:
                 self._description = [
@@ -344,7 +340,6 @@ class Cursor:
 
             data = result.get("data", [])
             if data:
-                # Columnar form: List[Dict[name,type,values]]
                 if isinstance(data[0], dict) and "values" in data[0]:
                     if not has_description:
                         self._description = [
@@ -354,21 +349,31 @@ class Cursor:
                         has_description = True
                     column_rows = self._rows_from_columnar_data(data)
                     rows.extend(column_rows)
+                    new_rows = len(column_rows)
                 else:
-                    # Row-oriented data (list of rows)
                     for row in data:
                         rows.append(tuple(row))
+                    new_rows = len(data)
 
-            fetched_this_page = len(rows) - offset
-            if fetched_this_page <= 0:
-                # Nothing more to fetch; break to avoid infinite loop
-                break
+            return new_rows
 
-            offset += fetched_this_page
+        status_result = self._connection._get_statement_status(self._statement_handle)  # pylint: disable=protected-access
+        process_result_page(status_result)
+        offset = len(rows)
 
+        while True:
             if total_rows is not None and offset >= total_rows:
                 break
 
+            result = self._connection._get_statement_results(  # pylint: disable=protected-access
+                self._statement_handle, num_rows=page_size, offset=offset
+            )
+
+            fetched_this_page = process_result_page(result)
+            if fetched_this_page <= 0:
+                break
+
+            offset += fetched_this_page
             if fetched_this_page < page_size:
                 break
 
