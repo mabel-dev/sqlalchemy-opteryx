@@ -77,9 +77,7 @@ def Time(hour: int, minute: int, second: int) -> str:
     return f"{hour:02d}:{minute:02d}:{second:02d}"
 
 
-def Timestamp(
-    year: int, month: int, day: int, hour: int, minute: int, second: int
-) -> str:
+def Timestamp(year: int, month: int, day: int, hour: int, minute: int, second: int) -> str:
     """Construct a timestamp value."""
     return f"{year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}"
 
@@ -95,8 +93,10 @@ NUMBER = float
 DATETIME = str
 ROWID = str
 
+
 class Cursor:
     """DBAPI 2.0 Cursor implementation for Opteryx."""
+
     def __init__(self, connection: "Connection") -> None:
         self._connection = connection
         self._jwt_token: Optional[str] = None
@@ -138,8 +138,16 @@ class Cursor:
                 }
                 # Use the connection session for auth so auth header set for all subsequent calls
                 sess = getattr(self._connection, "_session", requests.Session())
-                headers = {"accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"}
-                resp = sess.post(auth_url, data=payload, headers=headers, timeout=getattr(self._connection, "_timeout", 30))
+                headers = {
+                    "accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                }
+                resp = sess.post(
+                    auth_url,
+                    data=payload,
+                    headers=headers,
+                    timeout=getattr(self._connection, "_timeout", 30),
+                )
                 resp.raise_for_status()
                 body = resp.json() if resp.text else {}
                 token = body.get("access_token") or body.get("token") or body.get("jwt")
@@ -224,7 +232,7 @@ class Cursor:
 
         # Submit the statement
         response = self._connection._submit_statement(operation, params_dict)
-        self._statement_handle = response.get("statementHandle")
+        self._statement_handle = response.get("execution_id")
 
         if not self._statement_handle:
             raise DatabaseError("No statement handle returned from server")
@@ -533,9 +541,7 @@ class Connection:
             return status
 
         # Try a dedicated results endpoint if it exists
-        url = urljoin(
-            self._data_base_url() + "/", f"api/v1/statements/{statement_handle}/results"
-        )
+        url = urljoin(self._data_base_url() + "/", f"api/v1/statements/{statement_handle}/results")
         params: Dict[str, Any] = {}
         if num_rows is not None:
             params["num_rows"] = int(num_rows)

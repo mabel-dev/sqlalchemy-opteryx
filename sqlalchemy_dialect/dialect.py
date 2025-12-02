@@ -272,9 +272,7 @@ class OptetyxDialect(default.DefaultDialect):
         """
         return []
 
-    def get_table_names(
-        self, connection: Any, schema: Optional[str] = None, **kw: Any
-    ) -> list:
+    def get_table_names(self, connection: Any, schema: Optional[str] = None, **kw: Any) -> list:
         """Get list of table names.
 
         Attempts to query Opteryx for available tables.
@@ -287,9 +285,7 @@ class OptetyxDialect(default.DefaultDialect):
         except Exception:
             return []
 
-    def get_view_names(
-        self, connection: Any, schema: Optional[str] = None, **kw: Any
-    ) -> list:
+    def get_view_names(self, connection: Any, schema: Optional[str] = None, **kw: Any) -> list:
         """Get list of view names.
 
         Opteryx may not distinguish between tables and views.
@@ -327,6 +323,4 @@ def register_dialect() -> None:
     from sqlalchemy.dialects import registry
 
     registry.register("opteryx", "app.sqlalchemy_dialect.dialect", "OptetyxDialect")
-    registry.register(
-        "opteryx.http", "app.sqlalchemy_dialect.dialect", "OptetyxDialect"
-    )
+    registry.register("opteryx.http", "app.sqlalchemy_dialect.dialect", "OptetyxDialect")
