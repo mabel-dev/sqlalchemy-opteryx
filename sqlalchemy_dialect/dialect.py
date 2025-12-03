@@ -22,6 +22,7 @@ from typing import Tuple
 
 from sqlalchemy import types as sqltypes
 from sqlalchemy.engine import default
+from sqlalchemy.engine.interfaces import ExecutionContext
 from sqlalchemy.engine.url import URL
 
 from . import dbapi
@@ -165,6 +166,25 @@ class OptetyxDialect(default.DefaultDialect):
                     pass
 
         return ([], opts)
+
+    def do_execute(
+        self,
+        cursor: Any,
+        statement: str,
+        parameters: Optional[Any],
+        context: Optional[ExecutionContext] = None,
+    ) -> Any:
+        """Propagate execution options so downstream code can react to them."""
+        execution_options = getattr(context, "execution_options", {}) if context is not None else {}
+        streaming_requested = bool(execution_options.get("stream_results"))
+        max_row_buffer = execution_options.get("max_row_buffer")
+
+        # Attach the parsed streaming hints to the DBAPI cursor for later use.
+        cursor._opteryx_execution_options = dict(execution_options)
+        cursor._opteryx_stream_results_requested = streaming_requested
+        cursor._opteryx_max_row_buffer = max_row_buffer
+
+        return super().do_execute(cursor, statement, parameters, context=context)
 
     def do_ping(self, dbapi_connection: Any) -> bool:
         """Check if the connection is still alive.

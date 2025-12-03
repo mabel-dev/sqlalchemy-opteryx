@@ -281,7 +281,7 @@ class Cursor:
             if normalized_state in ("UNKNOWN", "SUBMITTED", "EXECUTING", "RUNNING"):
                 time.sleep(poll_interval)
                 elapsed += poll_interval
-                poll_interval = min(poll_interval * 1.5, 5.0)
+                poll_interval = min(poll_interval * 1.5, 2.5)
                 continue
 
             raise DatabaseError(f"Unknown statement state: {state_value}")
@@ -315,7 +315,7 @@ class Cursor:
         if not self._statement_handle:
             return
 
-        page_size = max(100, 1, self._arraysize)
+        page_size = max(self._opteryx_max_row_buffer or 10, self._arraysize)
         offset = 0
         has_description = False
         rows: List[Tuple[Any, ...]] = []
