@@ -7,6 +7,7 @@ Simple smoke-test script for Opteryx auth + data endpoints.
 from __future__ import annotations
 
 import os
+import pathlib
 import sys
 import time
 from typing import Any
@@ -18,10 +19,9 @@ import orjson
 import requests
 from orso import DataFrame
 
-from sqlalchemy_opteryx.tests.__init__ import load_dotenv_simple
-
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from sqlalchemy_opteryx.tests.__init__ import load_dotenv_simple
 
 try:
     import brotli  # type: ignore[import]
@@ -29,7 +29,7 @@ except ImportError:  # pragma: no cover - optional dependency for brotli
     brotli = None
 
 
-load_dotenv_simple()
+load_dotenv_simple(str(pathlib.Path(__file__).resolve().parents[1] / ".env"))
 
 
 DEFAULT_AUTH_URL = "https://auth.opteryx.app"

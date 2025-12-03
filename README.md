@@ -1,17 +1,19 @@
 # sqlalchemy-opteryx
 
-SQLAlchemy dialect for Opteryx Cloud (https://opteryx.app) — use On Demand Opteryx from your favorite analytics tools.
+SQLAlchemy dialect for Opteryx Cloud (https://opteryx.app) — use On Demand Opteryx wherever SQLAlchemy is supported.
 
-This project implements a SQLAlchemy dialect and a small DBAPI 2.0 wrapper that talks to Opteryx's HTTP API. It enables direct SQL access to Opteryx Cloud from SQLAlchemy-compatible libraries (SQLAlchemy Core, executors, and many 3rd-party tools that use SQLAlchemy engines).
+This project packages a SQLAlchemy dialect and lightweight DBAPI 2.0 adapter that talk to Opteryx's HTTP API, enabling read-only SQL access to Opteryx Cloud from SQLAlchemy Core, engines, and downstream tools like pandas and dbt. The library is now published on PyPI as `opteryx-sqlalchemy`, so you can `pip install opteryx-sqlalchemy` in any environment.
 
 ---
 
-## Highlights ✅
+## Features ✅
 
-- Connect to Opteryx Cloud or local Opteryx instances using a SQLAlchemy connection URL.
-- Read-only analytics: execute SQL queries and retrieve results (Opteryx is primarily an analytics engine).
-- Lightweight DBAPI implementation with robust polling and result retrieval.
-- Compatible with SQLAlchemy 2.x engine usage patterns.
+- Connect to Opteryx Cloud or self-hosted Opteryx instances with a SQLAlchemy connection URL and optional bearer token.
+- Read-only analytics with transparent polling of query status and incremental result streaming.
+- Lightweight DBAPI implementation that maps Opteryx types to SQLAlchemy while surfacing DatabaseError/OperationalError semantics.
+- Compatible with SQLAlchemy 2.x usage patterns, including context-managed engines and `text` queries.
+- Work with pandas, dbt, or other tooling that understands SQLAlchemy engines.
+- Install from PyPI (`pip install opteryx-sqlalchemy`) or lock into editable mode for development.
 
 ---
 
@@ -25,8 +27,8 @@ opteryx://[username:token@]host[:port]/[database][?ssl=true&timeout=60]
 
 Examples:
 
-- `opteryx://data.opteryx.app/default`
-- `opteryx://user:mytoken@data.opteryx.app:443/default?ssl=true`
+- `opteryx://opteryx.app/default`
+- `opteryx://user:mytoken@opteryx.app:443/default?ssl=true`
 - `opteryx://localhost:8000/default`
 
 Notes:
@@ -37,18 +39,18 @@ Notes:
 
 ## Installation
 
-Install locally in editable mode for development (recommended):
+Install the published package from PyPI in any environment:
+
+```bash
+pip install opteryx-sqlalchemy
+```
+
+For contributions or debugging, install the local project in editable mode with the SQLAlchemy extras:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .[sqlalchemy]
-```
-
-Or, where available, install from PyPI (package name in pyproject is `opteryx-data`):
-
-```bash
-pip install opteryx-data
+pip install -e '.[sqlalchemy]'
 ```
 
 ---
@@ -61,7 +63,7 @@ Basic usage with SQLAlchemy 2.x:
 from sqlalchemy import create_engine, text
 
 # Basic connection (no token)
-engine = create_engine("opteryx://data.opteryx.app/default?ssl=true")
+engine = create_engine("opteryx://opteryx.app/default?ssl=true")
 
 with engine.connect() as conn:
     result = conn.execute(text("SELECT id, name FROM users LIMIT 10"))
@@ -77,7 +79,7 @@ with engine.connect() as conn:
 Token authentication example:
 
 ```python
-engine = create_engine("opteryx://username:password@data.opteryx.app:443/opteryx?ssl=true")
+engine = create_engine("opteryx://username:password@opteryx.app:443/opteryx?ssl=true")
 ```
 
 ---
@@ -90,7 +92,7 @@ You can use `pandas.read_sql_query` with a SQLAlchemy connection:
 import pandas as pd
 from sqlalchemy import create_engine
 
-engine = create_engine("opteryx://data.opteryx.app/default?ssl=true")
+engine = create_engine("opteryx://opteryx.app/default?ssl=true")
 with engine.connect() as conn:
     df = pd.read_sql_query("SELECT * FROM users LIMIT 100", conn)
     print(df.head())
@@ -137,10 +139,10 @@ Contributions are welcome. To contribute:
 
 ## Reference
 
-- Project package name (pyproject): `opteryx-data`
+- Project package name (pyproject): `opteryx-sqlalchemy`
 - Dialect name: `opteryx` (SQLAlchemy dialect entry points are registered in `pyproject.toml`)
 - DBAPI module: `sqlalchemy_dialect.dbapi`
-- Dialect class: `sqlalchemy_dialect.dialect:OptetyxDialect`
+- Dialect class: `sqlalchemy_dialect.dialect:OpteryxDialect`
 
 ---
 
@@ -152,8 +154,8 @@ If you find a bug or want to request a feature, please open an issue describing 
 
 ## License
 
-See LICENSE file in the repository (if present) for details.
+See LICENSE file in the repository for details.
 
 ---
 
-Thanks for using `sqlalchemy-opteryx` — bring On Demand Opteryx to your analytics workflows! 🚀
+Thank you for using `opteryx-sqlalchemy` — bring On Demand Opteryx to your analytics workflows! 🚀
