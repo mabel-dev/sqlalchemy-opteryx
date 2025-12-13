@@ -529,7 +529,7 @@ class Connection:
         self._check_closed()
 
         url = urljoin(self._data_base_url() + "/", "api/v1/statements")
-        payload: Dict[str, Any] = {"sqlText": sql}
+        payload: Dict[str, Any] = {"sql_text": sql}
         if parameters:
             payload["parameters"] = parameters
 

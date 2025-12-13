@@ -7,7 +7,6 @@ Simple smoke-test script for Opteryx auth + data endpoints.
 from __future__ import annotations
 
 import os
-import pathlib
 import sys
 import time
 from typing import Any
@@ -21,7 +20,7 @@ from orso import DataFrame
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from sqlalchemy_opteryx.tests.__init__ import load_dotenv_simple
+from tests import load_dotenv_simple
 
 try:
     import brotli  # type: ignore[import]
@@ -29,14 +28,16 @@ except ImportError:  # pragma: no cover - optional dependency for brotli
     brotli = None
 
 
-load_dotenv_simple(str(pathlib.Path(__file__).resolve().parents[1] / ".env"))
+load_dotenv_simple(".env")
 
 
 DEFAULT_AUTH_URL = "https://auth.opteryx.app"
 DEFAULT_DATA_URL = "https://data.opteryx.app"
 DEFAULT_CLIENT_ID = os.environ.get("CLIENT_ID")
 DEFAULT_CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
-SQL_STATEMENT = "SELECT S.Company FROM $missions AS S CROSS JOIN $planets AS P"
+SQL_STATEMENT = "SELECT * FROM opteryx.ops.stderr_log"
+iSQL_STATEMENT = "SELECT * FROM public.space.planets"
+SQL_STATEMENT = "SELECT count(*) FROM opteryx.clickbench.hits;"
 
 
 def fatal(msg: str) -> None:
@@ -93,7 +94,7 @@ def create_statement(
 ) -> Dict[str, Any]:
     url = f"{data_url.rstrip('/')}/api/v1/statements"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    payload: Dict[str, Any] = {"sqlText": sql}
+    payload: Dict[str, Any] = {"sql_text": sql}
     if describe_only is not None:
         payload["describeOnly"] = describe_only
 
