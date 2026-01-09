@@ -580,6 +580,13 @@ class Connection:
             return response.json()
         except requests.exceptions.HTTPError as e:
             if e.response is not None:
+                # Authentication/authorization errors should raise OperationalError
+                if e.response.status_code in (401, 403):
+                    try:
+                        detail = e.response.json().get("detail", str(e))
+                    except (ValueError, json.JSONDecodeError):
+                        detail = e.response.text or str(e)
+                    raise OperationalError(f"Authentication error: {detail}") from e
                 try:
                     detail = e.response.json().get("detail", str(e))
                 except (ValueError, json.JSONDecodeError):
@@ -600,8 +607,21 @@ class Connection:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.HTTPError as e:
-            if e.response is not None and e.response.status_code == 404:
-                raise ProgrammingError("Statement not found") from e
+            if e.response is not None:
+                # Authentication/authorization errors should raise OperationalError
+                if e.response.status_code in (401, 403):
+                    try:
+                        detail = e.response.json().get("detail", str(e))
+                    except (ValueError, json.JSONDecodeError):
+                        detail = e.response.text or str(e)
+                    raise OperationalError(f"Authentication error: {detail}") from e
+                if e.response.status_code == 404:
+                    raise ProgrammingError("Statement not found") from e
+                try:
+                    detail = e.response.json().get("detail", str(e))
+                except (ValueError, json.JSONDecodeError):
+                    detail = e.response.text or str(e)
+                raise DatabaseError(f"HTTP error: {detail}") from e
             raise DatabaseError(f"HTTP error: {e}") from e
         except requests.exceptions.RequestException as e:
             raise OperationalError(f"Connection error: {e}") from e
@@ -647,6 +667,16 @@ class Connection:
             result = {"data": rows, "columns": [{"name": col} for col in (columns or [])]}
 
             return result
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None:
+                # Authentication/authorization errors should raise OperationalError
+                if e.response.status_code in (401, 403):
+                    try:
+                        detail = e.response.json().get("detail", str(e))
+                    except (ValueError, json.JSONDecodeError):
+                        detail = e.response.text or str(e)
+                    raise OperationalError(f"Authentication error: {detail}") from e
+            # For other HTTP errors, fall back to status endpoint
         except requests.exceptions.RequestException:
             pass
 
